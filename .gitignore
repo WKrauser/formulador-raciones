@@ -5,3 +5,7 @@ android/app/build/
 android/.gradle/
 android/build/
 *.log
+
+# Entregables locales
+*.bundle
+formulador-raciones-codigo.zip
