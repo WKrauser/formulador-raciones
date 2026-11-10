@@ -13,10 +13,10 @@
     "preview": "vite preview",
     "test": "vitest run",
     "electron:dev": "vite build && electron .",
-    "dist:win": "vite build && electron-builder --win nsis portable --x64",
+    "dist:win": "vite build && electron-builder --win nsis portable --x64 --publish never",
     "android:sync": "vite build && cap sync android",
     "android:open": "cap open android",
-    "dist:win:zip": "vite build && electron-builder --win zip --x64"
+    "dist:win:zip": "vite build && electron-builder --win zip --x64 --publish never"
   },
   "dependencies": {},
   "devDependencies": {
