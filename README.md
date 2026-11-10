@@ -56,6 +56,8 @@ npm test
 
 El flujo `.github/workflows/build.yml` compila automáticamente el instalador `.exe` (runner Windows) y el APK de Android
 al subir el repositorio a GitHub. Los descarga desde la pestaña *Actions* → *Artifacts*.
+En cada push a `main` también publica la versión web en **GitHub Pages** (`https://<usuario>.github.io/<repositorio>/`);
+en Android ábrala con Chrome y use *Agregar a pantalla de inicio* para instalarla.
 
 ## Actualizar las tablas
 
