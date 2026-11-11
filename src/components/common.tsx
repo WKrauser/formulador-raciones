@@ -83,6 +83,7 @@ export function ConstraintEditor({
             <tr>
               <th>Nutriente</th>
               <th>Unidad</th>
+              <th title="Tal cual o base materia seca">Base</th>
               <th>Mínimo</th>
               <th>Máximo</th>
               {!readOnly && <th />}
@@ -93,6 +94,16 @@ export function ConstraintEditor({
               <tr key={c.key + i}>
                 <td>{NUTRIENT_MAP[c.key]?.name ?? c.key}</td>
                 <td className="muted">{NUTRIENT_MAP[c.key]?.unit}</td>
+                <td>
+                  {readOnly ? (
+                    c.basis === 'ms' ? 'MS' : 'TC'
+                  ) : (
+                    <select className="basis" value={c.basis ?? 'tc'} onChange={(e) => set(i, { basis: e.target.value as 'tc' | 'ms' })} aria-label="base">
+                      <option value="tc">TC</option>
+                      <option value="ms">MS</option>
+                    </select>
+                  )}
+                </td>
                 <td>
                   <NumInput value={c.min} onChange={(v) => set(i, { min: v })} disabled={readOnly} width={90} ariaLabel="mínimo" />
                 </td>
@@ -110,7 +121,7 @@ export function ConstraintEditor({
             ))}
             {constraints.length === 0 && (
               <tr>
-                <td colSpan={5} className="muted">
+                <td colSpan={6} className="muted">
                   Sin restricciones de nutrientes.
                 </td>
               </tr>
@@ -124,7 +135,7 @@ export function ConstraintEditor({
           <button
             disabled={!newKey}
             onClick={() => {
-              onChange?.([...constraints, { key: newKey, min: null, max: null }], ratios);
+              onChange?.([...constraints, { key: newKey, min: null, max: null, basis: constraints.some((c) => c.basis === 'ms') ? 'ms' : 'tc' }], ratios);
               setNewKey('');
             }}
           >
@@ -201,4 +212,33 @@ export function Modal({ title, onClose, children, wide }: { title: string; onClo
 
 export function SourceBadge({ source }: { source: string }) {
   return <span className={'badge src-' + source.toLowerCase()}>{source}</span>;
+}
+
+const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+
+/** Sinónimos español → inglés para buscar en tablas NASEM y Feedtables. */
+const SYNONYMS: Record<string, string[]> = {
+  maiz: ['corn', 'maize'], ensilado: ['silage', 'silo'], ensilaje: ['silage', 'silo'], silo: ['silage', 'ensilado'], heno: ['hay'],
+  paja: ['straw'], soja: ['soybean', 'soy'], soya: ['soybean', 'soy', 'soja'], cebada: ['barley'], trigo: ['wheat'], sorgo: ['sorghum'],
+  avena: ['oat'], centeno: ['rye'], arroz: ['rice'], pasto: ['pasture', 'grass'], pastura: ['pasture'], hierba: ['grass'], gramineas: ['grass'],
+  leguminosa: ['legume'], melaza: ['molasses'], harina: ['meal', 'hna'], hna: ['harina', 'meal'], algodon: ['cotton'], semilla: ['seed'],
+  pulpa: ['pulp'], salvado: ['bran'], afrecho: ['bran'], grasa: ['fat'], aceite: ['oil', 'fat'], sebo: ['tallow'], sal: ['salt', 'sodium chloride'],
+  caliza: ['limestone'], carbonato: ['carbonate', 'limestone'], fosfato: ['phosphate'], cascarilla: ['hulls'], cascara: ['hulls'],
+  girasol: ['sunflower'], colza: ['canola', 'rapeseed'], canola: ['colza'], lino: ['flax', 'linseed'], cacahuete: ['peanut', 'groundnut'],
+  mani: ['peanut', 'groundnut'], palmiste: ['palm kernel'], pescado: ['fish'], sangre: ['blood'], plumas: ['feather'], suero: ['whey'],
+  leche: ['milk'], levadura: ['yeast'], cerveza: ['brewers'], bagazo: ['bagasse', 'brewers grains'], citricos: ['citrus'], remolacha: ['beet'],
+  yuca: ['cassava', 'tapioca'], mandioca: ['cassava', 'tapioca'], guisante: ['pea'], arveja: ['pea'], haba: ['bean', 'faba'], urea: ['urea'],
+  premezcla: ['premix'], vitamina: ['vit'], magnesio: ['magnesium'], bicarbonato: ['bicarbonate'], destilados: ['distillers', 'ddgs'],
+  gluten: ['gluten'], grano: ['grain'], molido: ['ground'], humedo: ['wet', 'hm'], seco: ['dry'], alfalfa: ['alfalfa', 'legume'],
+};
+
+/** Devuelve una función que prueba si un texto contiene todos los términos buscados (con sinónimos). */
+export function makeMatcher(query: string): ((text: string) => boolean) | null {
+  const terms = norm(query).split(/\s+/).filter(Boolean);
+  if (!terms.length) return null;
+  const alts = terms.map((t) => [t, ...(SYNONYMS[t] ?? [])]);
+  return (text: string) => {
+    const h = norm(text);
+    return alts.every((a) => a.some((t) => h.includes(t)));
+  };
 }

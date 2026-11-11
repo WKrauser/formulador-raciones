@@ -6,12 +6,17 @@ Es una sola base de código React + TypeScript.
 
 ## Funciones
 
-- **Biblioteca de ingredientes**: 617 materias primas con su composición tal cual.
+- **Biblioteca de ingredientes**: 956 materias primas con su composición tal cual (vista opcional en base MS).
   - **FEDNA 2019** (4ª ed., hoja oficial v.15.01.2021): 293 ingredientes.
+  - **FEDNA forrajes y subproductos húmedos**: 55 variantes de ensilados (maíz, cebada, trigo, triticale, girasol, colza), henos y pastos por rango de MS o calidad (VRF), y subproductos húmedos.
+  - **NASEM 2021**: biblioteca de 284 alimentos del modelo de vacuno lechero (forrajes, ensilados, pasturas, concentrados, minerales).
   - **Feedtables INRAE-CIRAD-AFZ** (feedtables.com): 324 ingredientes, todas las fichas publicadas.
   - **Ingredientes locales**: se crean desde cero, se duplican desde una tabla para ajustarlos con un análisis de laboratorio, o se importan por CSV.
 - **Precios manuales** por ingrediente, por kg, tonelada o quintal, con la moneda que se configure. Se pueden importar y exportar por CSV.
 - **Requerimientos**:
+  - **Bovinos de leche — NASEM 2021**: calculador para vacas en lactancia, secas y novillas (consumo, EM, PM, Ca y P absorbibles; gestación, crecimiento, reservas, pastoreo y actividad).
+  - **Bovinos de carne — NRC 2000 / NASEM 2016**: recría y engorde (ENm, ENg, PM, Ca, P; tipo racial, sexo, punto de terminación; densidad energética resuelta a partir del consumo) y vaca de cría (mantenimiento, lactancia y gestación). Validado contra la tabla 20-1 de NASEM 2016.
+  - Las restricciones de bovinos se expresan en **base materia seca** y la fórmula muestra kg tal cual y de MS por animal y día; la hoja de mezclado se calcula por número de animales (unifeed).
   - NRC 1994 para pollos de engorde (3 fases) y ponedoras.
   - NRC/NASEM 2012 para cerdos en crecimiento (7 fases, AA SID, EN, STTD P).
   - Perfiles **manuales** para cualquier especie, por ejemplo bovinos de leche (NASEM 2021), bovinos de carne (NASEM 2016), peces o equinos.
@@ -85,6 +90,7 @@ Equivalencias entre tablas:
 ## Notas importantes
 
 - Los requerimientos NRC incluidos están marcados **“verificar”**. Se transcribieron de reproducciones secundarias de las tablas y no de la publicación oficial (National Academies Press). Compárelos con ella antes de usarlos comercialmente.
-- Los requerimientos de NASEM 2021 (leche) y NASEM 2016 (carne) se calculan con modelos dinámicos según el animal. Ingréselos como perfil manual.
+- Bovinos: la PM aportada por la dieta se estima por ingrediente con el método NRC 2001 (proteína microbiana = 0,13 × NDT limitada por 0,85 × PDR; PM = 0,64 × PB microbiana + 0,80 × PNDR), no con el submodelo ruminal completo de NASEM 2021. La EM de los ingredientes viene de cada tabla (FEDNA y NASEM con base NRC; Feedtables INRA 2018). Las restricciones de FDN ≥ 25 %, FDN de forraje ≥ 19 % y grasa ≤ 7 % en leche son guías prácticas editables.
+- La biblioteca y las ecuaciones de NASEM son propiedad intelectual de NASEM: el uso comercial requiere su autorización.
 - FEDNA no reporta histidina, leucina ni fenilalanina. Si los restringe, use ingredientes de Feedtables o quite la restricción; la app lo advierte.
 - Los datos de las tablas pertenecen a FEDNA e INRAE-CIRAD-AFZ. Antes de redistribuir la app comercialmente, verifique las condiciones de uso de cada fuente.

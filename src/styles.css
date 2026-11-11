@@ -114,10 +114,12 @@ tr.micro td { font-style: italic; }
 .src-fedna { color: #8a3b12; background: #fbe9dd; }
 .src-feedtables { color: #1b4f8a; background: #e1ecfa; }
 .src-local { color: #5b2a86; background: #efe3fa; }
+.src-nasem { color: #0f6b5c; background: #dcf3ee; }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) .src-fedna { background: #3a2417; color: #f2b48c; }
   :root:not([data-theme='light']) .src-feedtables { background: #17263a; color: #93bdf2; }
   :root:not([data-theme='light']) .src-local { background: #2a1d3a; color: #c9a6ef; }
+  :root:not([data-theme='light']) .src-nasem { background: #14302b; color: #8fd9c8; }
 }
 
 .note { background: var(--accent); border-radius: 8px; padding: 8px 10px; }
@@ -164,3 +166,8 @@ legend { font-weight: 600; font-size: 12px; color: var(--primary); }
   .modal, .modal.wide { width: 100%; max-height: 100vh; height: 100%; border-radius: 0; }
   .cards { grid-template-columns: minmax(0, 1fr); }
 }
+
+select.basis { padding: 4px 6px; font-size: 12px; }
+.calc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
+.tabs-inline { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+.tabs-inline button.active { background: var(--primary); color: var(--primary-text); border-color: var(--primary); }

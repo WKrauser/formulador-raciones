@@ -5,7 +5,7 @@ import { parseCSV, parseNum, readFileAsText, saveFile, toCSV } from '../lib/file
 import type { Ingredient, Source } from '../lib/types';
 import { PRICE_UNIT_LABEL } from '../lib/types';
 import { setPrice, useData } from '../state';
-import { Modal, NumInput, SourceBadge } from './common';
+import { makeMatcher, Modal, NumInput, SourceBadge } from './common';
 
 const PAGE = 150;
 
@@ -15,6 +15,7 @@ export function IngredientsView() {
   const [src, setSrc] = useState<'' | Source>('');
   const [cat, setCat] = useState('');
   const [onlyPriced, setOnlyPriced] = useState(false);
+  const [dmBasis, setDmBasis] = useState(false);
   const [limit, setLimit] = useState(PAGE);
   const [editing, setEditing] = useState<Ingredient | null>(null);
   const [msg, setMsg] = useState('');
@@ -26,22 +27,22 @@ export function IngredientsView() {
     [ingredients, src],
   );
   const list = useMemo(() => {
-    const terms = q
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[̀-ͯ]/g, '')
-      .split(/\s+/)
-      .filter(Boolean);
+    const match = makeMatcher(q);
     return ingredients.filter((i) => {
       if (!settings.sources.includes(i.source)) return false;
       if (src && i.source !== src) return false;
       if (cat && i.category !== cat) return false;
       if (onlyPriced && !prices[i.id]) return false;
-      if (!terms.length) return true;
-      const hay = (i.name + ' ' + (i.code ?? '') + ' ' + i.category).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
-      return terms.every((t) => hay.includes(t));
+      return !match || match(i.name + ' ' + (i.code ?? '') + ' ' + i.category);
     });
   }, [ingredients, q, src, cat, onlyPriced, prices, settings.sources]);
+
+  /** Valor de un nutriente tal cual o en base MS según la vista */
+  const b = (i: Ingredient, k: string): number | null => {
+    const v = i.n[k];
+    if (v === undefined) return null;
+    return dmBasis && i.n.ms ? (v * 100) / i.n.ms : v;
+  };
 
   const newLocal = () =>
     setEditing({ id: uid('local:'), name: '', source: 'Local', category: 'Ingredientes locales', n: {} });
@@ -119,6 +120,9 @@ export function IngredientsView() {
         <label className="check">
           <input type="checkbox" checked={onlyPriced} onChange={(e) => setOnlyPriced(e.target.checked)} /> Solo con precio
         </label>
+        <label className="check">
+          <input type="checkbox" checked={dmBasis} onChange={(e) => setDmBasis(e.target.checked)} /> Base MS
+        </label>
       </div>
       <div className="toolbar">
         <button className="primary" onClick={newLocal}>+ Ingrediente local</button>
@@ -164,7 +168,7 @@ export function IngredientsView() {
         }} />
       </div>
       {msg && <p className="note" onClick={() => setMsg('')}>{msg}</p>}
-      <p className="muted small">{list.length} ingredientes. Valores tal cual. Precio {PRICE_UNIT_LABEL[settings.priceUnit]} ({settings.currency}).</p>
+      <p className="muted small">{list.length} ingredientes. Valores {dmBasis ? 'en base materia seca' : 'tal cual'}. Precio {PRICE_UNIT_LABEL[settings.priceUnit]} ({settings.currency}).</p>
       <div className="table-wrap">
         <table className="grid hover">
           <thead>
@@ -175,7 +179,8 @@ export function IngredientsView() {
               <th className="n">MS %</th>
               <th className="n">PB %</th>
               <th className="n hide-sm">EE %</th>
-              <th className="n hide-sm">FB %</th>
+              <th className="n hide-sm">FDN %</th>
+              <th className="n hide-sm" title="Energía metabolizable rumiantes">EM rum. Mcal/kg</th>
               <th className="n">Precio</th>
             </tr>
           </thead>
@@ -186,9 +191,10 @@ export function IngredientsView() {
                 <td><SourceBadge source={i.source} /></td>
                 <td className="hide-sm muted">{i.category}</td>
                 <td className="n">{fmt(i.n.ms, 1)}</td>
-                <td className="n">{fmt(i.n.pb, 1)}</td>
-                <td className="n hide-sm">{fmt(i.n.ee, 1)}</td>
-                <td className="n hide-sm">{fmt(i.n.fb, 1)}</td>
+                <td className="n">{fmt(b(i, 'pb'), 1)}</td>
+                <td className="n hide-sm">{fmt(b(i, 'ee'), 1)}</td>
+                <td className="n hide-sm">{fmt(b(i, 'fnd'), 1)}</td>
+                <td className="n hide-sm">{fmt(i.n.em_rum === undefined ? null : (b(i, 'em_rum') ?? 0) / 1000, 2)}</td>
                 <td className="n">{prices[i.id] ? fmt(toUnit(prices[i.id].price), 2) : ''}</td>
               </tr>
             ))}
@@ -212,7 +218,10 @@ function IngredientEditor({ ing, onClose, onOpen }: { ing: Ingredient; onClose: 
   async function save() {
     if (editable) {
       if (!draft.name.trim()) return alert('Escriba un nombre.');
-      await db.ingredients.put({ ...draft, name: draft.name.trim(), updatedAt: Date.now() });
+      const n = { ...draft.n };
+      if (draft.forage && n.fnd !== undefined) n.fnd_forraje = n.fnd;
+      else if (!draft.forage) delete n.fnd_forraje;
+      await db.ingredients.put({ ...draft, n, name: draft.name.trim(), updatedAt: Date.now() });
     }
     if (price !== null) await setPrice(ing.id, fromUnit(price), avail);
     else await db.prices.delete(ing.id);
@@ -227,6 +236,7 @@ function IngredientEditor({ ing, onClose, onOpen }: { ing: Ingredient; onClose: 
       category: ing.category,
       n: { ...ing.n },
       basedOn: ing.id,
+      forage: ing.forage,
       notes: `Basado en ${ing.source}: ${ing.name}`,
     });
   }
@@ -239,6 +249,9 @@ function IngredientEditor({ ing, onClose, onOpen }: { ing: Ingredient; onClose: 
             <label>Nombre<input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} /></label>
             <label>Categoría<input value={draft.category} onChange={(e) => setDraft({ ...draft, category: e.target.value })} /></label>
             <label className="span2">Notas<input value={draft.notes ?? ''} onChange={(e) => setDraft({ ...draft, notes: e.target.value })} /></label>
+            <label className="check">
+              <input type="checkbox" checked={!!draft.forage} onChange={(e) => setDraft({ ...draft, forage: e.target.checked })} /> Es forraje (su FDN cuenta como FDN de forraje)
+            </label>
           </>
         ) : (
           <p className="span2 muted">
@@ -260,7 +273,10 @@ function IngredientEditor({ ing, onClose, onOpen }: { ing: Ingredient; onClose: 
               <legend>{g}</legend>
               {rows.map((nu) => (
                 <div className="kv" key={nu.key}>
-                  <span>{nu.name} <small className="muted">{nu.unit}</small></span>
+                  <span>
+                    {nu.name} <small className="muted">{nu.unit}</small>
+                    {ing.est?.includes(nu.key) && <small className="warn" title="Valor estimado, no medido en la tabla de origen"> (est.)</small>}
+                  </span>
                   {editable ? (
                     <NumInput
                       value={draft.n[nu.key] ?? null}

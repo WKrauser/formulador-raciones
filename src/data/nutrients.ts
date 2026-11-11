@@ -116,6 +116,13 @@ export const NUTRIENTS: Nutrient[] = [
   n('pdin', 'PDIN', '%', 'Rumiantes', 2),
   n('pdi', 'PDI (INRA 2018)', '%', 'Rumiantes', 2),
   n('pbd_rum', 'PB digestible rumiantes', '%', 'Rumiantes', 2),
+  n('pdr', 'Proteína degradable en rumen (PDR)', '%', 'Rumiantes', 2),
+  n('pndr', 'Proteína no degradable en rumen (PNDR)', '%', 'Rumiantes', 2),
+  n('pm_ndt', 'PM estimada, límite energía (NDT)', 'g/kg', 'Rumiantes', 1),
+  n('pm_pdr', 'PM estimada, límite PDR', 'g/kg', 'Rumiantes', 1),
+  n('fnd_forraje', 'FDN de forraje', '%', 'Rumiantes', 2),
+  n('ca_abs', 'Calcio absorbible', '%', 'Rumiantes', 3),
+  n('p_abs', 'Fósforo absorbible', '%', 'Rumiantes', 3),
 
   n('c18_2', 'Ácido linoleico (C18:2)', '%', 'Ácidos grasos', 3),
   n('c18_3', 'Ácido linolénico (C18:3)', '%', 'Ácidos grasos', 3),

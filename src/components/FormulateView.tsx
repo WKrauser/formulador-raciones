@@ -3,11 +3,11 @@ import { NUTRIENT_MAP, fmt } from '../data/nutrients';
 import { db, uid } from '../lib/db';
 import { printHtml, saveFile, toCSV } from '../lib/files';
 import { formulaReportHtml, mixingSheetHtml, mixLines } from '../lib/reports';
-import { getHighs, solveFormula } from '../lib/solver';
+import { dmValue, getHighs, solveFormula } from '../lib/solver';
 import type { Formula, FormulaItem } from '../lib/types';
 import { PRICE_UNIT_LABEL } from '../lib/types';
 import { setPrice, useData } from '../state';
-import { ConstraintEditor, Modal, NumInput, SourceBadge } from './common';
+import { ConstraintEditor, makeMatcher, Modal, NumInput, SourceBadge } from './common';
 
 export function newFormula(batchKg = 1000): Formula {
   const now = Date.now();
@@ -42,6 +42,7 @@ export function FormulateView({ draft, setDraft }: { draft: Formula; setDraft: (
     update({
       requirementId: req.id,
       species: draft.species || req.name,
+      dmi: req.dmi ?? draft.dmi ?? null,
       constraints: req.constraints.map((c) => ({ ...c })),
       ratios: (req.ratios ?? []).map((c) => ({ ...c })),
     });
@@ -97,6 +98,10 @@ export function FormulateView({ draft, setDraft }: { draft: Formula; setDraft: (
           <label>Código<input value={draft.code ?? ''} onChange={(e) => update({ code: e.target.value })} /></label>
           <label>Especie / etapa<input value={draft.species ?? ''} onChange={(e) => update({ species: e.target.value })} /></label>
           <label>Notas<input value={draft.notes ?? ''} onChange={(e) => update({ notes: e.target.value })} /></label>
+          <label title="Opcional. Para raciones de bovinos: muestra kg por animal y día y permite preparar la mezcla por número de animales.">
+            Consumo de MS (kg/animal/día)
+            <NumInput value={draft.dmi ?? null} onChange={(v) => update({ dmi: v })} />
+          </label>
         </div>
         <div className="row gap wrap">
           <button onClick={() => { if (confirm('¿Empezar una fórmula nueva? Los cambios no guardados se perderán.')) { setDraft(newFormula(settings.defaultBatchKg)); setSolvedHash(''); } }}>Nueva</button>
@@ -228,7 +233,7 @@ export function FormulateView({ draft, setDraft }: { draft: Formula; setDraft: (
                     ...draft.items.filter((it) => (r.inclusion[it.ingId] ?? 0) > 1e-6).map((it) => [names[it.ingId]?.name, names[it.ingId]?.source, +r.inclusion[it.ingId].toFixed(4), +toUnit(it.price).toFixed(4)]),
                     [],
                     ['Nutriente', 'Unidad', 'Mínimo', 'Máximo', 'Fórmula'],
-                    ...draft.constraints.map((c) => [NUTRIENT_MAP[c.key]?.name ?? c.key, NUTRIENT_MAP[c.key]?.unit, c.min, c.max, +(r.nutrients[c.key] ?? 0).toFixed(4)]),
+                    ...draft.constraints.map((c) => [NUTRIENT_MAP[c.key]?.name ?? c.key, (NUTRIENT_MAP[c.key]?.unit ?? '') + (c.basis === 'ms' ? ' MS' : ''), c.min, c.max, +(c.basis === 'ms' ? dmValue(r.nutrients, c.key) : r.nutrients[c.key] ?? 0).toFixed(4)]),
                   ]),
                   'text/csv',
                 )
@@ -248,14 +253,11 @@ export function FormulateView({ draft, setDraft }: { draft: Formula; setDraft: (
 function IngredientPicker({ onPick, exclude }: { onPick: (id: string) => void; exclude: string[] }) {
   const { ingredients, prices, settings } = useData();
   const [q, setQ] = useState('');
-  const terms = q.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').split(/\s+/).filter(Boolean);
-  const res = terms.length
+  const match = makeMatcher(q);
+  const res = match
     ? ingredients
         .filter((i) => settings.sources.includes(i.source) && !exclude.includes(i.id))
-        .filter((i) => {
-          const h = (i.name + ' ' + i.category).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
-          return terms.every((t) => h.includes(t));
-        })
+        .filter((i) => match(i.name + ' ' + i.category))
         .sort((a, b) => Number(!!prices[b.id]) - Number(!!prices[a.id]))
         .slice(0, 25)
     : [];
@@ -280,8 +282,10 @@ function IngredientPicker({ onPick, exclude }: { onPick: (id: string) => void; e
 }
 
 function Results({ draft, names }: { draft: Formula; names: Record<string, { name: string; source: string }> }) {
-  const { settings, toUnit } = useData();
+  const { settings, toUnit, byId } = useData();
   const r = draft.result!;
+  const dmPct = r.nutrients.ms ?? 0;
+  const perAnimal = draft.dmi && draft.dmi > 0 && dmPct > 0 ? draft.dmi / (dmPct / 100) : null;
   const unitLabel = settings.priceUnit === 'kg' ? '/kg' : settings.priceUnit === 't' ? '/t' : '/qq';
   return (
     <div className="card">
@@ -310,10 +314,20 @@ function Results({ draft, names }: { draft: Formula; names: Record<string, { nam
         </details>
       )}
       {r.status === 'optimal' && (
+        <p className="small">
+          MS de la mezcla: <b>{fmt(dmPct, 1)} %</b> · Costo por kg de MS: <b>{settings.currency} {fmt(dmPct > 0 ? r.costPerKg / (dmPct / 100) : 0, 3)}</b>
+          {perAnimal && (
+            <>
+              {' '}· Ración: <b>{fmt(perAnimal, 2)} kg TC</b> ({fmt(draft.dmi, 2)} kg MS) por animal y día · Costo: <b>{settings.currency} {fmt(r.costPerKg * perAnimal, 2)}</b> por animal y día
+            </>
+          )}
+        </p>
+      )}
+      {r.status === 'optimal' && (
         <div className="two-col">
           <div className="table-wrap">
             <table className="grid">
-              <thead><tr><th>Ingrediente</th><th className="n">%</th><th className="n">kg/t</th><th className="n">{settings.currency}/t</th><th>Análisis de precio</th></tr></thead>
+              <thead><tr><th>Ingrediente</th><th className="n">%</th><th className="n">kg/t</th>{perAnimal && <><th className="n" title="kg tal cual por animal y día">kg TC/an/d</th><th className="n" title="kg de materia seca por animal y día">kg MS/an/d</th></>}<th className="n">{settings.currency}/t</th><th>Análisis de precio</th></tr></thead>
               <tbody>
                 {draft.items
                   .map((it) => ({ it, pct: r.inclusion[it.ingId] ?? 0 }))
@@ -329,12 +343,18 @@ function Results({ draft, names }: { draft: Formula; names: Record<string, { nam
                         <td>{names[it.ingId]?.name}</td>
                         <td className="n">{fmt(pct, 3)}</td>
                         <td className="n">{fmt(pct * 10, 2)}</td>
+                        {perAnimal && (
+                          <>
+                            <td className="n">{fmt((perAnimal * pct) / 100, 2)}</td>
+                            <td className="n">{fmt((((perAnimal * pct) / 100) * (byId[it.ingId]?.n.ms ?? 0)) / 100, 2)}</td>
+                          </>
+                        )}
                         <td className="n">{fmt(it.price * pct * 10, 2)}</td>
                         <td className="small muted">{hint}</td>
                       </tr>
                     );
                   })}
-                <tr className="tot"><td>Total</td><td className="n">{fmt(Object.values(r.inclusion).reduce((a, b) => a + b, 0), 3)}</td><td className="n">1000</td><td className="n">{fmt(r.costPerKg * 1000, 2)}</td><td /></tr>
+                <tr className="tot"><td>Total</td><td className="n">{fmt(Object.values(r.inclusion).reduce((a, b) => a + b, 0), 3)}</td><td className="n">1000</td>{perAnimal && <><td className="n">{fmt(perAnimal, 2)}</td><td className="n">{fmt(draft.dmi, 2)}</td></>}<td className="n">{fmt(r.costPerKg * 1000, 2)}</td><td /></tr>
               </tbody>
             </table>
           </div>
@@ -344,13 +364,15 @@ function Results({ draft, names }: { draft: Formula; names: Record<string, { nam
               <tbody>
                 {draft.constraints.map((c) => {
                   const nu = NUTRIENT_MAP[c.key];
-                  const v = r.nutrients[c.key] ?? 0;
+                  const dm = c.basis === 'ms';
+                  const v = dm ? dmValue(r.nutrients, c.key) : r.nutrients[c.key] ?? 0;
                   const tol = 1e-6 * Math.max(1, Math.abs(v));
                   const ok = (c.min === null || v >= c.min - tol) && (c.max === null || v <= c.max + tol);
-                  const sp = (r.shadow[`${c.key}:min`] ?? 0) + (r.shadow[`${c.key}:max`] ?? 0);
+                  const sk = dm ? `${c.key}@ms` : c.key;
+                  const sp = (r.shadow[`${sk}:min`] ?? 0) + (r.shadow[`${sk}:max`] ?? 0);
                   return (
-                    <tr key={c.key}>
-                      <td>{nu?.name ?? c.key} <small className="muted">{nu?.unit}</small></td>
+                    <tr key={c.key + (c.basis ?? '')}>
+                      <td>{nu?.name ?? c.key} <small className="muted">{nu?.unit}{dm ? ' MS' : ''}</small></td>
                       <td className="n">{fmt(c.min, nu?.decimals)}</td>
                       <td className="n">{fmt(c.max, nu?.decimals)}</td>
                       <td className={'n ' + (ok ? '' : 'bad')}><b>{fmt(v, nu?.decimals)}</b></td>
@@ -382,9 +404,24 @@ export function MixDialog({ f, names, onClose }: { f: Formula; names: Record<str
   const [batches, setBatches] = useState<number | null>(1);
   const [lot, setLot] = useState(new Date().toISOString().slice(0, 10).replace(/-/g, ''));
   const [mixMin, setMixMin] = useState<number | null>(5);
+  const [animals, setAnimals] = useState<number | null>(null);
+  const dmPct = f.result?.nutrients.ms ?? 0;
+  const perAnimal = f.dmi && f.dmi > 0 && dmPct > 0 ? f.dmi / (dmPct / 100) : null;
   const lines = mixLines(f, names, batchKg ?? 0, batches ?? 1);
   return (
     <Modal title="Hoja de mezclado" onClose={onClose} wide>
+      {perAnimal && (
+        <div className="row gap wrap note">
+          <span>
+            Ración unifeed: {fmt(perAnimal, 2)} kg tal cual por animal y día. Calcular bachada para
+          </span>
+          <NumInput value={animals} onChange={setAnimals} width={80} ariaLabel="animales" />
+          <span>animales</span>
+          <button disabled={!animals} onClick={() => setBatchKg(Math.round(perAnimal * (animals ?? 0) * 10) / 10)}>
+            Aplicar
+          </button>
+        </div>
+      )}
       <div className="form-grid">
         <label>Tamaño de bachada (kg)<NumInput value={batchKg} onChange={setBatchKg} /></label>
         <label>Número de bachadas<NumInput value={batches} onChange={setBatches} /></label>

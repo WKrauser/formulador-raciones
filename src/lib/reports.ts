@@ -147,11 +147,13 @@ export function formulaReportHtml(f: Formula, ings: Record<string, { name: strin
   const nutRows = f.constraints
     .map((c) => {
       const nu = NUTRIENT_MAP[c.key];
-      const v = r.nutrients[c.key] ?? 0;
+      const dm = c.basis === 'ms';
+      const v = dm ? ((r.nutrients[c.key] ?? 0) * 100) / Math.max(r.nutrients.ms ?? 0, 1e-9) : r.nutrients[c.key] ?? 0;
       const tol = 1e-6 * Math.max(1, Math.abs(v));
       const ok = (c.min === null || v >= c.min - tol) && (c.max === null || v <= c.max + tol);
-      const sp = (r.shadow[`${c.key}:min`] ?? 0) + (r.shadow[`${c.key}:max`] ?? 0);
-      return `<tr><td>${esc(nu?.name ?? c.key)}</td><td>${esc(nu?.unit ?? '')}</td><td class="n">${fmt(c.min, nu?.decimals ?? 2)}</td><td class="n">${fmt(
+      const sk = dm ? `${c.key}@ms` : c.key;
+      const sp = (r.shadow[`${sk}:min`] ?? 0) + (r.shadow[`${sk}:max`] ?? 0);
+      return `<tr><td>${esc(nu?.name ?? c.key)}</td><td>${esc((nu?.unit ?? '') + (dm ? ' MS' : ''))}</td><td class="n">${fmt(c.min, nu?.decimals ?? 2)}</td><td class="n">${fmt(
         c.max,
         nu?.decimals ?? 2,
       )}</td><td class="n ${ok ? '' : 'bad'}">${fmt(v, nu?.decimals ?? 2)}</td><td class="n">${sp ? fmt(sp * 1000, 4) : ''}</td></tr>`;
@@ -165,6 +167,18 @@ export function formulaReportHtml(f: Formula, ings: Record<string, { name: strin
   const body = `
   ${header('Informe de fórmula', f, s, [
     ['Costo', `${s.currency} ${fmt(r.costPerKg * unitKg, 2)} ${priceLabel}  ·  ${s.currency} ${fmt(r.costPerKg * 1000, 2)} /t`],
+    ['MS de la mezcla', `${fmt(r.nutrients.ms ?? 0, 1)} %`],
+    ...((f.dmi && (r.nutrients.ms ?? 0) > 0
+      ? [
+          [
+            'Ración por animal y día',
+            `${fmt(f.dmi / ((r.nutrients.ms ?? 0) / 100), 2)} kg TC (${fmt(f.dmi, 2)} kg MS) · ${s.currency} ${fmt(
+              (r.costPerKg * f.dmi) / ((r.nutrients.ms ?? 0) / 100),
+              2,
+            )}`,
+          ],
+        ]
+      : []) as [string, string][]),
   ])}
   <h2>Composición de la fórmula</h2>
   <table><thead><tr><th>Ingrediente</th><th>Fuente</th><th>Inclusión %</th><th>Precio ${esc(s.currency)}${priceLabel}</th><th>Aporte ${esc(

@@ -33,6 +33,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<AppData>(() => {
     const settings = { ...DEFAULT_SETTINGS, ...(settingsRow ?? {}) };
+    // Fuentes nuevas aparecen activas aunque existan ajustes guardados de una versión anterior
+    const known = settingsRow?.knownSources ?? ['FEDNA', 'Feedtables', 'Local'];
+    for (const src of DEFAULT_SETTINGS.sources) if (!known.includes(src) && !settings.sources.includes(src)) settings.sources = [...settings.sources, src];
     const ingredients = [...(local ?? []).sort((a, b) => a.name.localeCompare(b.name)), ...TABLE_INGREDIENTS];
     const byId = Object.fromEntries(ingredients.map((i) => [i.id, i]));
     const prices = Object.fromEntries((priceRows ?? []).map((p) => [p.id, p]));

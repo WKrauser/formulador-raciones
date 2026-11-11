@@ -9,7 +9,7 @@ export function SettingsView() {
   const { settings } = useData();
   const [msg, setMsg] = useState('');
   const ref = useRef<HTMLInputElement>(null);
-  const put = (patch: Partial<Settings>) => db.settings.put({ ...settings, ...patch });
+  const put = (patch: Partial<Settings>) => db.settings.put({ ...settings, ...patch, knownSources: ['FEDNA', 'Feedtables', 'NASEM', 'Local'] });
   const count = (s: Source) => TABLE_INGREDIENTS.filter((i) => i.source === s).length;
 
   return (
@@ -31,7 +31,7 @@ export function SettingsView() {
         </div>
         <h4>Fuentes de ingredientes visibles</h4>
         <div className="row gap wrap">
-          {(['FEDNA', 'Feedtables', 'Local'] as Source[]).map((s) => (
+          {(['FEDNA', 'Feedtables', 'NASEM', 'Local'] as Source[]).map((s) => (
             <label className="check" key={s}>
               <input
                 type="checkbox"
@@ -69,11 +69,18 @@ export function SettingsView() {
         <ul className="small">
           <li><b>FEDNA 2019</b> — Tablas FEDNA de composición y valor nutritivo de alimentos (4ª ed.), Fundación Española para el Desarrollo de la Nutrición Animal. Hoja oficial v. 15.01.2021 (fundacionfedna.org).</li>
           <li><b>Feedtables</b> — Tablas INRAE-CIRAD-AFZ de composición y valor nutritivo de materias primas (feedtables.com). Valores tal cual; AA y minerales convertidos de g/kg a %.</li>
-          <li><b>Requerimientos</b> — NRC (1994) Aves; NRC/NASEM (2012) Cerdos. Verifique con la publicación oficial.</li>
+          <li><b>FEDNA forrajes y subproductos húmedos</b> — fichas de fundacionfedna.org (ensilados, henos, pastos, por rango de MS o calidad VRF).</li>
+          <li><b>NASEM</b> — biblioteca de alimentos de NASEM (2021) Nutrient Requirements of Dairy Cattle, distribuida con la implementación abierta
+            nasem_dairy (U. de Guelph). EM, ENl, ENm y ENg calculadas desde ED con las ecuaciones NRC. La propiedad intelectual es de NASEM: el uso
+            comercial requiere su autorización.</li>
+          <li><b>Requerimientos</b> — Bovinos de leche: NASEM (2021). Bovinos de carne: NRC (2000) / NASEM (2016). Aves: NRC (1994). Cerdos: NRC/NASEM
+            (2012), por verificar.</li>
         </ul>
         <p className="muted small">
           Equivalencias usadas entre tablas: EMAn aves = FEDNA “EMA aves adultas” / Feedtables “AMEn cockerel”; EMAn pollos = FEDNA “EMA pollitos” /
-          Feedtables “AMEn broiler”; EN porcino = FEDNA “EN porcino” / Feedtables “NE growing pig”; AA digestibles aves = FEDNA “digestible fecal real”
+          Feedtables “AMEn broiler”; PNDR = Feedtables “RUP NRC 2001 (50 % concentrado)” / FEDNA forrajes “degradabilidad del N” / FEDNA
+          concentrados estimada desde PDIA (dr = 0,85) / NASEM “RUP base”; Ca y P absorbibles con coeficientes NASEM (por defecto 0,4/0,6 Ca y
+          0,79/0,70 P en forrajes/concentrados cuando la tabla no los trae); EN porcino = FEDNA “EN porcino” / Feedtables “NE growing pig”; AA digestibles aves = FEDNA “digestible fecal real”
           / Feedtables “ileal standardized poultry”; P digestible porcino = FEDNA “total aparente” / Feedtables “sin fitasa”. Los datos de tablas
           pertenecen a sus autores; para uso comercial o redistribución verifique sus condiciones de uso. {DATA_SOURCES_NOTE}.
         </p>

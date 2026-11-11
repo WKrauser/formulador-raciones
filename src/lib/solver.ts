@@ -60,13 +60,17 @@ function buildRows(input: SolveInput): Row[] {
   constraints.forEach((c, ci) => {
     const coefs = items.map((it) => value(ingredients[it.ingId], c.key));
     const nu = NUTRIENT_MAP[c.key];
-    const label = nu ? nu.name : c.key;
-    // dieta = sum(n_i x_i)/100
+    const dm = c.basis === 'ms';
+    const label = (nu ? nu.name : c.key) + (dm ? ' (MS)' : '');
+    const key = dm ? `${c.key}@ms` : c.key;
+    // Tal cual: sum(n_i x_i)/100 >= req.  Base MS: sum(n_i x_i) >= req · sum(ms_i x_i)/100  ->  sum((n_i - req·ms_i/100) x_i) >= 0
+    const ms = items.map((it) => value(ingredients[it.ingId], 'ms'));
+    const row = (req: number) => (dm ? coefs.map((a, i) => a - (req * ms[i]) / 100) : coefs);
     if (c.min !== null && c.min !== undefined && !Number.isNaN(c.min)) {
-      rows.push({ name: `nmin${ci}`, label, coefs, sense: '>=', rhs: c.min * 100, kind: 'min', key: c.key, required: c.min, scaleBack: 0.01 });
+      rows.push({ name: `nmin${ci}`, label, coefs: row(c.min), sense: '>=', rhs: dm ? 0 : c.min * 100, kind: 'min', key, required: c.min, scaleBack: 0.01 });
     }
     if (c.max !== null && c.max !== undefined && !Number.isNaN(c.max)) {
-      rows.push({ name: `nmax${ci}`, label, coefs, sense: '<=', rhs: c.max * 100, kind: 'max', key: c.key, required: c.max, scaleBack: 0.01 });
+      rows.push({ name: `nmax${ci}`, label, coefs: row(c.max), sense: '<=', rhs: dm ? 0 : c.max * 100, kind: 'max', key, required: c.max, scaleBack: 0.01 });
     }
   });
   ratios.forEach((r, ri) => {
@@ -125,6 +129,12 @@ function buildLP(input: SolveInput, rows: Row[], elastic: boolean): { lp: string
   return { lp: lines.join('\n'), scales };
 }
 
+/** Valor de un nutriente de la mezcla expresado en base materia seca. */
+export function dmValue(nutrients: Record<string, number>, key: string): number {
+  const ms = nutrients.ms ?? 0;
+  return ms > 0 ? ((nutrients[key] ?? 0) * 100) / ms : 0;
+}
+
 export function mixNutrients(inclusion: Record<string, number>, ingredients: Record<string, Ingredient>): Record<string, number> {
   const out: Record<string, number> = {};
   for (const [id, pct] of Object.entries(inclusion)) {
@@ -154,6 +164,7 @@ function solveInner(highs: HighsLike, input: SolveInput): SolveResult {
   const keys = new Set([
     ...input.constraints.map((c) => c.key),
     ...(input.ratios ?? []).flatMap((r) => [r.num, r.den]),
+    ...(input.constraints.some((c) => c.basis === 'ms') ? ['ms'] : []),
   ]);
   const isAA = (k: string) => AA_KEYS.has(k.replace(/^(sid|dav)_/, ''));
   const missing = items
@@ -240,6 +251,8 @@ function solveInner(highs: HighsLike, input: SolveInput): SolveResult {
             const ri = Number(row.key.split(':')[1]);
             const rr = input.ratios![ri];
             achieved = (nutrients[rr.num] ?? 0) / Math.max(nutrients[rr.den] ?? 0, 1e-12);
+          } else if (row.key.endsWith('@ms')) {
+            achieved = dmValue(nutrients, row.key.slice(0, -3));
           } else achieved = nutrients[row.key] ?? 0;
           violations.push({ label: row.label, required: row.required, achieved, kind: row.kind });
         }

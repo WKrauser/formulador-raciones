@@ -1,4 +1,4 @@
-export type Source = 'FEDNA' | 'Feedtables' | 'Local';
+export type Source = 'FEDNA' | 'Feedtables' | 'NASEM' | 'Local';
 
 export interface Ingredient {
   id: string;
@@ -11,6 +11,10 @@ export interface Ingredient {
   notes?: string;
   /** Para ingredientes locales: id del ingrediente de tablas del que se copió */
   basedOn?: string;
+  /** Forraje (su FDN cuenta como FDN de forraje) */
+  forage?: boolean;
+  /** Nutrientes estimados (no medidos en la tabla de origen) */
+  est?: string[];
   updatedAt?: number;
 }
 
@@ -27,6 +31,8 @@ export interface Constraint {
   key: string;
   min: number | null;
   max: number | null;
+  /** Base de expresión: tal cual (por defecto) o materia seca */
+  basis?: 'tc' | 'ms';
 }
 
 /** Relación entre nutrientes: min <= num/den <= max */
@@ -48,6 +54,10 @@ export interface RequirementProfile {
   note?: string;
   constraints: Constraint[];
   ratios?: RatioConstraint[];
+  /** Consumo de MS previsto, kg/animal/día (bovinos) */
+  dmi?: number;
+  /** Datos del animal usados en el cálculo */
+  inputs?: Record<string, unknown>;
   updatedAt?: number;
 }
 
@@ -97,6 +107,8 @@ export interface Formula {
   snapshot?: Record<string, Pick<Ingredient, 'name' | 'source' | 'category' | 'n'>>;
   result?: SolveResult;
   batchKg: number;
+  /** Consumo de MS, kg/animal/día (opcional; bovinos) */
+  dmi?: number | null;
   version: number;
   createdAt: number;
   updatedAt: number;
@@ -110,6 +122,8 @@ export interface Settings {
   defaultBatchKg: number;
   /** Fuentes visibles en la biblioteca */
   sources: Source[];
+  /** Fuentes existentes cuando se guardaron los ajustes (para activar fuentes nuevas) */
+  knownSources?: Source[];
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -118,7 +132,7 @@ export const DEFAULT_SETTINGS: Settings = {
   priceUnit: 'kg',
   company: '',
   defaultBatchKg: 1000,
-  sources: ['FEDNA', 'Feedtables', 'Local'],
+  sources: ['FEDNA', 'Feedtables', 'NASEM', 'Local'],
 };
 
 /** kg por unidad de precio */
